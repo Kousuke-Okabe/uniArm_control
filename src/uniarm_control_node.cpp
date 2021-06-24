@@ -35,6 +35,7 @@ int main( int argc, char* argv[] )
     cm.update(t, d);
     robot.write();
 
+/*
     if( dq1.data == 0 ){
         dq1.data = 5;
     }
@@ -43,7 +44,7 @@ int main( int argc, char* argv[] )
     }
 
     cmd_dq1.publish(dq1);
-
+*/
     rate.sleep();
   }
 

@@ -14,6 +14,7 @@
 
 #define nLink	3
 #define PCI_DA "contec_Ao"
+#define PCI_AD "contec_Ai"
 
 class UniArm : public hardware_interface::RobotHW
 {
@@ -32,17 +33,18 @@ private:
   double vel[3];
   double eff[3];
 
-  // DA
-	long	Ret;                      //関数の戻り値
-	char	DeviceName[256] = PCI_DA; //デバイス名
-	short	Id;                       //ID
-	char	ErrorString[256];         //エラーコード文字列
-	short	AoRange;                  //レンジ
-	short	AoChannels = nLink;       //使用チャネル数
-	float	AoVolt;                   //変換データ(電圧)
-	float	AoData[nLink];            //変換データ
-	long	AoSamplingCount;	        //現在のサンプリング回数
-	long	AoStatus;                 //現在のステータス
+  // AIO
+	long	Ret;                          //関数の戻り値
+  char	DeviceName[20];               //デバイス名
+	short	Id_Ao, Id_Ai;                 //ID
+	char	ErrorString[256];             //エラーコード文字列
+	short	AoRange, AiRange;             //レンジ
+	short	AoChannels = nLink;           //使用チャネル数
+	short	AiChannels = nLink;
+	float	AoData[nLink], AiData[nLink];      //変換データ
+	long	AoSamplingCount, AiSamplingCount;	 //現在のサンプリング回数
+	long	AoStatus, AiStatus;                //現在のステータス
+	long	AiSamplingTimes = 1;               //取得サンプリング回数
 };
 
 UniArm::UniArm()
@@ -72,110 +74,198 @@ UniArm::UniArm()
   registerInterface(&jnt_vel_interface);
 
   //----------------------------------------------------------------------------
-  // DA converter initialize
+  // Analog Output initialize
   //----------------------------------------------------------------------------
-  Ret = AioInit(DeviceName, &Id);
+  //初期化処理
+  strcpy(DeviceName, PCI_DA);
+  Ret = AioInit(DeviceName, &Id_Ao);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioInit = %ld : %s\n\n", Ret, ErrorString);
+		ROS_INFO("AoInit = %ld : %s", Ret, ErrorString);
 		exit(0);
 	}
 	//デバイスのリセット
-	Ret = AioResetDevice(Id);
+	Ret = AioResetDevice(Id_Ao);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioResetDevice = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoResetDevice = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//出力レンジの設定
 	AoRange = 0; // ± 10V
-	Ret = AioSetAoRangeAll(Id, AoRange);
+	Ret = AioSetAoRangeAll(Id_Ao, AoRange);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoRangeAll = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoRangeAll = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//チャネル数の設定
-	Ret = AioSetAoChannels(Id, AoChannels);
+	Ret = AioSetAoChannels(Id_Ao, AoChannels);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoChannels = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoChannels = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//メモリ形式の設定：FIFO
-	Ret = AioSetAoMemoryType(Id, 0);
+	Ret = AioSetAoMemoryType(Id_Ao, 0);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoMemoryType = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoMemoryType = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//クロック種類の設定：内部
-	Ret = AioSetAoClockType(Id, 0);
+	Ret = AioSetAoClockType(Id_Ao, 0);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoClockType = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoClockType = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//変換速度の設定：10usec
-	Ret = AioSetAoSamplingClock(Id, 10);
+	Ret = AioSetAoSamplingClock(Id_Ao, 10);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoSamplingClock = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoSamplingClock = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//開始条件の設定：ソフトウェア
-	Ret = AioSetAoStartTrigger(Id, 0);
+	Ret = AioSetAoStartTrigger(Id_Ao, 0);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoStartTrigger = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoStartTrigger = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//停止条件の設定：設定回数変換終了
-	Ret = AioSetAoStopTrigger(Id, 0);
+	Ret = AioSetAoStopTrigger(Id_Ao, 0);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioSetAoStopTrigger = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoSetAoStopTrigger = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
 	//メモリのリセット
-	Ret = AioResetAoMemory(Id);
+	Ret = AioResetAoMemory(Id_Ao);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
-		printf("AioResetAoMemory = %ld : %s\n\n", Ret, ErrorString);
-		Ret = AioExit(Id);
+		ROS_INFO("AoResetAoMemory = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
-  //出力データ、サンプリング回数の設定：nLink=3?
-  Ret = AioSetAoSamplingDataEx(Id, (long)AoChannels, &AoData[0]);
-  if(Ret != 0){
-    AioGetErrorString(Ret, ErrorString);
-    printf("AioSetAoSamplingDataEx = %ld : %s\n\n", Ret, ErrorString);
-    Ret = AioExit(Id);
-    exit(0);
-  }
+  ROS_INFO("Analog Output initialized");
 
-  printf("AD converter initialized \n");
+
+  //----------------------------------------------------------------------------
+  // Analog Input initialize
+  //----------------------------------------------------------------------------
+  //初期化処理
+  strcpy(DeviceName, PCI_AD);
+	Ret = AioInit(DeviceName, &Id_Ai);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiInit = %ld : %s", Ret, ErrorString);
+		exit(0);
+	}
+	//デバイスのリセット
+	Ret = AioResetDevice(Id_Ai);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiResetDevice = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//入力レンジの設定
+	AiRange = 0;	// pm10V
+	Ret = AioSetAiRangeAll(Id_Ai, AiRange);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiRangeAll = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//チャネル数の設定
+	Ret = AioSetAiChannels(Id_Ai, AiChannels);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiChannels = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//メモリ形式の設定：FIFO
+	Ret = AioSetAiMemoryType(Id_Ai, 0);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiMemoryType = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//クロック種類の設定：内部
+	Ret = AioSetAiClockType(Id_Ai, 0);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiClockType = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//変換速度の設定：10usec
+	Ret = AioSetAiSamplingClock(Id_Ai, 10*nLink);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiSamplingClock = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//開始条件の設定：ソフトウェア
+	Ret = AioSetAiStartTrigger(Id_Ai, 0);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiStartTrigger = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//停止条件の設定：設定回数変換終了
+	Ret = AioSetAiStopTrigger(Id_Ai, 0);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiStopTrigger = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+  ROS_INFO("Analog Input initialized");
 }
 
-UniArm::~UniArm()
-{
+UniArm::~UniArm(){
   //----------------------------------------------------------------------------
-  // DA Ternimalize
+  // Analog Output Finalize
   //----------------------------------------------------------------------------
-  Ret = AioExit(Id);
+  Ret = AioExit(Id_Ao);
   if(Ret != 0){
     AioGetErrorString(Ret, ErrorString);
-    printf("AioExit = %ld : %s\n\n", Ret, ErrorString);
+    ROS_INFO("AoExit = %ld : %s", Ret, ErrorString);
     exit(0);
   }
+  //リレーOFF
+/*  for(i = 0 ; i < AoChannels ; i++){
+    Ret = AioDisableAo(Id_Ao, i);
+  }*/
+  ROS_INFO("Analog Output Finalize");
+
+  //----------------------------------------------------------------------------
+  // AD Finalize
+  //----------------------------------------------------------------------------
+  Ret = AioExit(Id_Ai);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiExit = %ld : %s", Ret, ErrorString);
+		exit(0);
+	}
+  ROS_INFO("Analog Input Finalize");
+
 }
 
 void UniArm::read()
@@ -189,6 +279,73 @@ void UniArm::read()
   eff[0] = 0.0;
   eff[1] = 0.0;
   eff[2] = 0.0;
+
+  //----------------------------------------------------------------------------
+	//	変換開始
+	//----------------------------------------------------------------------------
+  //サンプリング回数の設定：1回
+	Ret = AioSetAiStopTimes(Id_Ai, 1);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiSetAiStopTimes = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//メモリのリセット
+	Ret = AioResetAiMemory(Id_Ai);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiResetAiMemory = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+	//変換開始
+	Ret = AioStartAi(Id_Ai);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiStartAi = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+
+	//	変換状態取得
+	do{
+		//ステータスの取得
+		Ret = AioGetAiStatus(Id_Ai, &AiStatus);
+		if(Ret != 0){
+			AioGetErrorString(Ret, ErrorString);
+			ROS_INFO("AiGetAiStatus = %ld : %s", Ret, ErrorString);
+			Ret = AioExit(Id_Ai);
+			exit(0);
+		}
+		//メモリ内格納サンプリング数の取得
+		Ret = AioGetAiSamplingCount(Id_Ai, &AiSamplingCount);
+		if(Ret != 0){
+			AioGetErrorString(Ret, ErrorString);
+			ROS_INFO("AiGetAiSamplingCount = %ld : %s", Ret, ErrorString);
+			Ret = AioExit(Id_Ai);
+			exit(0);
+		}
+		//ROS_INFO("Number of sampling: %ld  Status: %xH\r", AiSamplingCount, (unsigned int)AiStatus);
+	}while((AiStatus & AIS_BUSY) == AIS_BUSY);
+
+	//変換データ取得
+	Ret = AioGetAiSamplingDataEx(Id_Ai, &AiSamplingTimes, &AiData[0]);
+	if(Ret != 0){
+		AioGetErrorString(Ret, ErrorString);
+		ROS_INFO("AiGetAiSamplingDataEx = %ld : %s", Ret, ErrorString);
+		Ret = AioExit(Id_Ai);
+		exit(0);
+	}
+/*  //変換データ表示
+  ROS_INFO("サンプリング\t電圧\n");
+  for(int j = 0 ; j < AiChannels ; j++){
+    ROS_INFO("%6.3fV ", AiData[i * AiChannels + j]);
+  }
+  printf("\n");
+*/
+//  ROS_INFO_STREAM("q1 angle " << AiData[0] << " q2 angle " << AiData[1] << " q3 angle " << AiData[2]);
+  ROS_INFO("q1 angle %.2f  q2 angle %.2f  q3 angle %.2f", AiData[0],AiData[1],AiData[2]);
 }
 
 void UniArm::write()
@@ -202,44 +359,42 @@ void UniArm::write()
   //----------------------------------------------------------------------------
   // AD Contert
   //----------------------------------------------------------------------------
-  //出力データ、サンプリング回数の設定：nLink=3?
-  Ret = AioSetAoSamplingDataEx(Id, 1, &AoData[0]);
+  //出力データ、サンプリング回数の設定：1回
+  Ret = AioSetAoSamplingDataEx(Id_Ao, 1, &AoData[0]);
   if(Ret != 0){
     AioGetErrorString(Ret, ErrorString);
-    printf("AioSetAoSamplingDataEx = %ld : %s\n\n", Ret, ErrorString);
-    Ret = AioExit(Id);
+    ROS_INFO("AoSetAoSamplingDataEx = %ld : %s", Ret, ErrorString);
+    Ret = AioExit(Id_Ao);
     exit(0);
   }
-
   //リレーON
   for(i = 0 ; i < AoChannels ; i++){
-    Ret = AioEnableAo(Id, i);
+    Ret = AioEnableAo(Id_Ao, i);
   }
-
   //変換開始
-  Ret = AioStartAo(Id);
+  Ret = AioStartAo(Id_Ao);
   if(Ret != 0){
     AioGetErrorString(Ret, ErrorString);
-    printf("AioStartAo = %ld : %s\n\n", Ret, ErrorString);
-    Ret = AioExit(Id);
+    ROS_INFO("AoStartAo = %ld : %s", Ret, ErrorString);
+    Ret = AioExit(Id_Ao);
     exit(0);
   }
 
   do{
     //ステータスの取得
-    Ret = AioGetAoStatus(Id, &AoStatus);
+    Ret = AioGetAoStatus(Id_Ao, &AoStatus);
     if(Ret != 0){
       AioGetErrorString(Ret, ErrorString);
-      printf("AioGetAoStatus = %ld : %s\n\n", Ret, ErrorString);
-      Ret = AioExit(Id);
+      ROS_INFO("AoGetAoStatus = %ld : %s", Ret, ErrorString);
+      Ret = AioExit(Id_Ao);
       exit(0);
     }
     //出力済サンプリング数の取得
-    Ret = AioGetAoSamplingCount(Id, &AoSamplingCount);
+    Ret = AioGetAoSamplingCount(Id_Ao, &AoSamplingCount);
     if(Ret != 0){
       AioGetErrorString(Ret, ErrorString);
-      printf("AioGetAoSamplingCount = %ld : %s\n\n", Ret, ErrorString);
-      Ret = AioExit(Id);
+      ROS_INFO("AoGetAoSamplingCount = %ld : %s", Ret, ErrorString);
+      Ret = AioExit(Id_Ao);
       exit(0);
     }
   }while((AoStatus & AOS_BUSY) == AOS_BUSY);
