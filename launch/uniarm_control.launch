@@ -1,0 +1,16 @@
+<launch>
+  <group ns="uniarm">
+    <rosparam file="$(find uniarm_control)/config/uniarm_control.yaml" command="load"/>
+
+    <node name="controller_manager"
+        pkg="controller_manager"
+        type="spawner" respawn="false"
+        output="screen"
+        args="joint_state_controller
+              velocity_controller_q1
+              velocity_controller_q2
+              velocity_controller_q3"/>
+
+    <node name="uniarm_control_node" pkg="uniarm_control" type="uniarm_control_node" output="screen" respawn="false" />
+  </group>
+</launch>
