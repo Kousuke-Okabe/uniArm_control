@@ -1,6 +1,6 @@
 joint_state_controller:
   type: "joint_state_controller/JointStateController"
-  publish_rate: 10
+  publish_rate: 1000
 
 velocity_controller_q1:
   type: "velocity_controllers/JointVelocityController"

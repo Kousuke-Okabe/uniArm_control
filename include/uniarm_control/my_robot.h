@@ -9,12 +9,14 @@
 #include <termios.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <bits/stdc++.h>
 //AIOヘッダファイル
 #include "caio.h"
 
 #define nLink	3
 #define PCI_DA "contec_Ao"
 #define PCI_AD "contec_Ai"
+//#define sensor	2 //中
 
 class UniArm : public hardware_interface::RobotHW
 {
@@ -32,6 +34,7 @@ private:
   double pos[3];
   double vel[3];
   double eff[3];
+  //double acc[2]; //中
 
   // AIO
 	long	Ret;                          //関数の戻り値
@@ -41,7 +44,7 @@ private:
 	short	AoRange, AiRange;             //レンジ
 	short	AoChannels = nLink;           //使用チャネル数
 	short	AiChannels = nLink;
-	float	AoData[nLink], AiData[nLink];      //変換データ
+	float	AoData[nLink], AiData[nLink*2]; //+sensor中     //変換データ
 	long	AoSamplingCount, AiSamplingCount;	 //現在のサンプリング回数
 	long	AoStatus, AiStatus;                //現在のステータス
 	long	AiSamplingTimes = 1;               //取得サンプリング回数
@@ -157,7 +160,7 @@ UniArm::UniArm()
 		Ret = AioExit(Id_Ao);
 		exit(0);
 	}
-  ROS_INFO("Analog Output initialized");
+//  ROS_INFO("Analog Output initialized");
 
 
   //----------------------------------------------------------------------------
@@ -189,7 +192,7 @@ UniArm::UniArm()
 		exit(0);
 	}
 	//チャネル数の設定
-	Ret = AioSetAiChannels(Id_Ai, AiChannels);
+	Ret = AioSetAiChannels(Id_Ai, AiChannels*2); //中+sensor
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
 		ROS_INFO("AiSetAiChannels = %ld : %s", Ret, ErrorString);
@@ -213,7 +216,7 @@ UniArm::UniArm()
 		exit(0);
 	}
 	//変換速度の設定：10usec
-	Ret = AioSetAiSamplingClock(Id_Ai, 10*nLink);
+	Ret = AioSetAiSamplingClock(Id_Ai, 10*AiChannels*2);
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
 		ROS_INFO("AiSetAiSamplingClock = %ld : %s", Ret, ErrorString);
@@ -236,7 +239,7 @@ UniArm::UniArm()
 		Ret = AioExit(Id_Ai);
 		exit(0);
 	}
-  ROS_INFO("Analog Input initialized");
+//  ROS_INFO("Analog Input initialized");
 }
 
 UniArm::~UniArm(){
@@ -253,7 +256,7 @@ UniArm::~UniArm(){
 /*  for(i = 0 ; i < AoChannels ; i++){
     Ret = AioDisableAo(Id_Ao, i);
   }*/
-  ROS_INFO("Analog Output Finalize");
+//  ROS_INFO("Analog Output Finalize");
 
   //----------------------------------------------------------------------------
   // AD Finalize
@@ -264,21 +267,12 @@ UniArm::~UniArm(){
 		ROS_INFO("AiExit = %ld : %s", Ret, ErrorString);
 		exit(0);
 	}
-  ROS_INFO("Analog Input Finalize");
+//  ROS_INFO("Analog Input Finalize");
 
 }
 
 void UniArm::read()
 {
-  pos[0] = 0.0;
-  pos[1] = 0.0;
-  pos[2] = 0.0;
-  vel[0] = 0.0;
-  vel[1] = 0.0;
-  vel[2] = 0.0;
-  eff[0] = 0.0;
-  eff[1] = 0.0;
-  eff[2] = 0.0;
 
   //----------------------------------------------------------------------------
 	//	変換開始
@@ -337,15 +331,23 @@ void UniArm::read()
 		Ret = AioExit(Id_Ai);
 		exit(0);
 	}
-/*  //変換データ表示
-  ROS_INFO("サンプリング\t電圧\n");
-  for(int j = 0 ; j < AiChannels ; j++){
-    ROS_INFO("%6.3fV ", AiData[i * AiChannels + j]);
-  }
-  printf("\n");
-*/
-//  ROS_INFO_STREAM("q1 angle " << AiData[0] << " q2 angle " << AiData[1] << " q3 angle " << AiData[2]);
-  ROS_INFO("q1 angle %.2f  q2 angle %.2f  q3 angle %.2f", AiData[0],AiData[1],AiData[2]);
+
+//  ROS_INFO("q1 angle %.2f  q2 angle %.2f", AiData[0],AiData[1]);
+
+  pos[0] = AiData[1]/8*M_PI;
+  pos[1] = AiData[3]/8*M_PI;
+  pos[2] = AiData[5]/8*M_PI;
+
+  vel[0] = cmd[0];
+  vel[1] = cmd[1];
+  vel[2] = cmd[2];
+
+  eff[0] = AiData[0]*0.3;
+  eff[1] = AiData[2]*0.3;
+  eff[2] = AiData[4]*0.3;
+
+  //acc[0] = AiData[6]; //中
+  //acc[1] = AiData[7];
 }
 
 void UniArm::write()
@@ -353,7 +355,7 @@ void UniArm::write()
   //ROS_INFO_STREAM("q1 command " << cmd[0] << " q2 command " << cmd[1] << " q3 command " << cmd[2]);
 
   for(i=0; i<nLink; i++){
-    AoData[i] = (float)cmd[i];
+    AoData[i] = (float)( cmd[i] / (13*M_PI/30) );
   }
 
   //----------------------------------------------------------------------------
