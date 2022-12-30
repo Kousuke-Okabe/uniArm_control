@@ -16,7 +16,7 @@
 #define nLink	3
 #define PCI_DA "contec_Ao"
 #define PCI_AD "contec_Ai"
-//#define sensor	2 //中
+#define sensor	2//中
 
 class UniArm : public hardware_interface::RobotHW
 {
@@ -32,9 +32,9 @@ private:
   hardware_interface::VelocityJointInterface jnt_vel_interface;
   double cmd[3]={0.0, 0.0, 0.0};
   double pos[3];
-  double vel[3];
+  double vel[3];//中
   double eff[3];
-  //double acc[2]; //中
+  double ord[3];
 
   // AIO
 	long	Ret;                          //関数の戻り値
@@ -44,7 +44,7 @@ private:
 	short	AoRange, AiRange;             //レンジ
 	short	AoChannels = nLink;           //使用チャネル数
 	short	AiChannels = nLink;
-	float	AoData[nLink], AiData[nLink*2]; //+sensor中     //変換データ
+	float	AoData[nLink], AiData[nLink*2+sensor];//中     //変換データ
 	long	AoSamplingCount, AiSamplingCount;	 //現在のサンプリング回数
 	long	AoStatus, AiStatus;                //現在のステータス
 	long	AiSamplingTimes = 1;               //取得サンプリング回数
@@ -73,7 +73,7 @@ UniArm::UniArm()
 
   hardware_interface::JointHandle vel_handle_q3(jnt_state_interface.getHandle("q3"), &cmd[2]);
   jnt_vel_interface.registerHandle(vel_handle_q3);
-
+  
   registerInterface(&jnt_vel_interface);
 
   //----------------------------------------------------------------------------
@@ -192,7 +192,7 @@ UniArm::UniArm()
 		exit(0);
 	}
 	//チャネル数の設定
-	Ret = AioSetAiChannels(Id_Ai, AiChannels*2); //中+sensor
+	Ret = AioSetAiChannels(Id_Ai, AiChannels*2+sensor);//中
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
 		ROS_INFO("AiSetAiChannels = %ld : %s", Ret, ErrorString);
@@ -216,7 +216,7 @@ UniArm::UniArm()
 		exit(0);
 	}
 	//変換速度の設定：10usec
-	Ret = AioSetAiSamplingClock(Id_Ai, 10*AiChannels*2);
+	Ret = AioSetAiSamplingClock(Id_Ai, 10*(AiChannels*2+sensor));//中
 	if(Ret != 0){
 		AioGetErrorString(Ret, ErrorString);
 		ROS_INFO("AiSetAiSamplingClock = %ld : %s", Ret, ErrorString);
@@ -338,16 +338,16 @@ void UniArm::read()
   pos[1] = AiData[3]/8*M_PI;
   pos[2] = AiData[5]/8*M_PI;
 
-  vel[0] = cmd[0];
-  vel[1] = cmd[1];
-  vel[2] = cmd[2];
+  vel[0] = (AiData[6]-0.991211)/0.1105*9.80665;
+  vel[1] = (AiData[7]-0.97168)/0.1105*9.80665;
+  ord[0] = cmd[0];
+  ord[1] = cmd[1];
+  ord[2] = cmd[2];
 
   eff[0] = AiData[0]*0.3;
   eff[1] = AiData[2]*0.3;
-  eff[2] = AiData[4]*0.3;
+  eff[2] = AiData[4]*0.3;//中
 
-  //acc[0] = AiData[6]; //中
-  //acc[1] = AiData[7];
 }
 
 void UniArm::write()
